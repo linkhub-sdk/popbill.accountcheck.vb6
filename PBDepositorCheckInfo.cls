@@ -6,26 +6,21 @@ BEGIN
   DataSourceBehavior  = 0  'vbNone
   MTSTransactionMode  = 0  'NotAnMTSObject
 END
-Attribute VB_Name = "PBAccountCheckInfo"
+Attribute VB_Name = "PBDepositorCheckInfo"
 Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = True
 Attribute VB_PredeclaredId = False
 Attribute VB_Exposed = False
-Public resultCode As String
 Public result As String
 Public resultMessage As String
 Public accountNumber As String
 Public bankCode As String
 Public accountName As String
+Public identityNumType As String
+Public identityNum As String
 Public checkDate As String
 
 Public Sub fromDictionary(dic As Variant)
-    If IsNull(dic.Item("resultCode")) = False Then
-        resultCode = dic.Item("resultCode")
-    Else
-        resultCode = ""
-    End If
-    
     If IsNull(dic.Item("result")) = False Then
         result = dic.Item("result")
     Else
@@ -56,10 +51,23 @@ Public Sub fromDictionary(dic As Variant)
         accountName = ""
     End If
     
+        If IsNull(dic.Item("identityNumType")) = False Then
+        identityNumType = dic.Item("identityNumType")
+    Else
+        identityNumType = ""
+    End If
+    
+        If IsNull(dic.Item("identityNum")) = False Then
+        identityNum = dic.Item("identityNum")
+    Else
+        identityNum = ""
+    End If
+    
     If IsNull(dic.Item("checkDate")) = False Then
         checkDate = dic.Item("checkDate")
     Else
         checkDate = ""
     End If
 End Sub
+
 

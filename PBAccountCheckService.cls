@@ -23,7 +23,7 @@ Option Explicit
 ' http://www.popbill.com
 ' Author : Jeong Yohan (code@linkhub.co.kr)
 ' Written : 2020-07-06
-' Updated : 2021-10-07
+' Updated : 2022-01-13
 '
 ' Thanks for your interest.
 '=================================================================================
@@ -36,6 +36,10 @@ Private Const ServiceURL_Static_TEST = "https://static-popbill-test.linkhub.co.k
 Private Const ServiceURL_GA_REAL = "https://ga-popbill.linkhub.co.kr"
 Private Const ServiceURL_GA_TEST = "https://ga-popbill-test.linkhub.co.kr"
 Private Const APIVersion = "1.0"
+
+Private Const adTypeBinary As Long = 1
+Private Const adTypeText As Long = 2
+Private Const adModeReadWrite As Long = 3
 
 Private m_IsTest As Boolean
 Private m_IPRestrictOnOff As Boolean
@@ -58,6 +62,53 @@ Private Sub Class_Terminate()
     m_token_Dic.RemoveAll
     Set m_token_Dic = Nothing
 End Sub
+
+Private Function URLEncode(ByVal StringToEncode As String) As String
+   Dim i                As Integer
+   Dim iAsc             As Long
+   Dim sTemp            As String
+   
+   Dim ByteArrayToEncode() As Byte
+ 
+   ByteArrayToEncode = ADO_EncodeUTF8(StringToEncode)
+   
+   For i = 0 To UBound(ByteArrayToEncode)
+      iAsc = ByteArrayToEncode(i)
+      Select Case iAsc
+         Case 32 'space
+            sTemp = "+"
+         Case 48 To 57, 65 To 90, 97 To 122
+            sTemp = Chr(ByteArrayToEncode(i))
+         Case Else
+            Debug.Print iAsc
+            sTemp = "%" & Hex(iAsc)
+      End Select
+      URLEncode = URLEncode & sTemp
+   Next
+ 
+End Function
+
+'Purpose: UTF16 to UTF8 using ADO
+Private Function ADO_EncodeUTF8(ByVal strUTF16 As String) As Byte()
+ 
+   Dim objStream        As Object
+   Dim Data()           As Byte
+ 
+   Set objStream = CreateObject("ADODB.Stream")
+   objStream.Charset = "utf-8"
+   objStream.Mode = adModeReadWrite
+   objStream.Type = adTypeText
+   objStream.Open
+   objStream.WriteText strUTF16
+   objStream.Flush
+   objStream.Position = 0
+   objStream.Type = adTypeBinary
+   objStream.Read 3 ' skip BOM
+   Data = objStream.Read()
+   objStream.Close
+   ADO_EncodeUTF8 = Data
+ 
+End Function
 '최근 오류코드 확인
 Public Property Get LastErrCode() As Long
     LastErrCode = m_LastErrCode
@@ -96,6 +147,7 @@ Public Sub Initialize(linkID As String, SecretKey As String)
     
     m_scope.Add "member"
     m_scope.Add "182"
+    m_scope.Add "183"
     
     m_IsTest = False
     m_IPRestrictOnOff = True
@@ -559,11 +611,18 @@ ErrHandler:
     m_LastErrMessage = Err.Description
 End Function
 '과금정보 조회
-Public Function GetChargeInfo(CorpNum As String, Optional UserID As String = "") As PBchargeInfo
+Public Function GetChargeInfo(CorpNum As String, Optional UserID As String = "", Optional ServiceType As String = "") As PBchargeInfo
 On Error GoTo ErrHandler
     Dim result As Variant
+    
+    Dim uri As String
+    
+    uri = "/EasyFin/AccountCheck/ChargeInfo"
+    If Not ServiceType = "" Then
+        uri = uri + "?serviceType=" + URLEncode(ServiceType)
+    End If
        
-    Set result = httpGET("/EasyFin/AccountCheck/ChargeInfo", getSession_token(CorpNum), UserID)
+    Set result = httpGET(uri, getSession_token(CorpNum), UserID)
     
     Set GetChargeInfo = New PBchargeInfo
         
@@ -576,11 +635,18 @@ ErrHandler:
     Set GetChargeInfo = Nothing
 End Function
 '조회단가 확인
-Public Function GetUnitCost(CorpNum As String) As Double
+Public Function GetUnitCost(CorpNum As String, Optional ServiceType As String = "", Optional UserID As String = "") As Double
 On Error GoTo ErrHandler
     Dim result As Variant
     
-    Set result = httpGET("/EasyFin/AccountCheck/UnitCost", getSession_token(CorpNum))
+    Dim uri As String
+    
+    uri = "/EasyFin/AccountCheck/UnitCost"
+    If Not ServiceType = "" Then
+        uri = uri + "?serviceType=" + URLEncode(ServiceType)
+    End If
+    
+    Set result = httpGET(uri, getSession_token(CorpNum), UserID)
     
     GetUnitCost = result.Item("unitCost")
     Exit Function
@@ -590,7 +656,7 @@ ErrHandler:
     GetUnitCost = m_LastErrCode
 End Function
 
-'예금주조회
+'계좌성명조회
 Public Function CheckAccountInfo(CorpNum As String, bankCode As String, accountNumber As String, Optional UserID As String = "") As PBAccountCheckInfo
 On Error GoTo ErrHandler
 
@@ -618,5 +684,42 @@ ErrHandler:
     m_LastErrMessage = Err.Description
     Set CheckAccountInfo = Nothing
 End Function
+
+'계좌실명조회
+Public Function CheckDepositorInfo(CorpNum As String, bankCode As String, accountNumber As String, IdentityNumType As String, identityNum As String, Optional UserID As String = "") As PBDepositorCheckInfo
+On Error GoTo ErrHandler
+
+    If bankCode = "" Then
+        Err.Raise -99999999, "POPBILL", "기관코드가 입력되지 않았습니다."
+    End If
+    
+    If accountNumber = "" Then
+        Err.Raise -99999999, "POPBILL", "계좌번호가 입력되지 않았습니다."
+    End If
+    
+    Dim uri As String
+    uri = "/EasyFin/DepositorCheck"
+    uri = uri + "?c=" + bankCode
+    uri = uri + "&n=" + accountNumber
+    uri = uri + "&t=" + IdentityNumType
+    uri = uri + "&p=" + identityNum
+    
+    Dim result As Variant
+    
+    Set result = httpPOST(uri, getSession_token(CorpNum), "", UserID)
+    
+    Set CheckDepositorInfo = New PBDepositorCheckInfo
+    
+    CheckDepositorInfo.fromDictionary result
+        
+    Exit Function
+    
+    
+ErrHandler:
+    m_LastErrCode = Err.Number
+    m_LastErrMessage = Err.Description
+    Set CheckDepositorInfo = Nothing
+End Function
+
 
 
