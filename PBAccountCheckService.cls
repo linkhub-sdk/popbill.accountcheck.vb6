@@ -397,8 +397,8 @@ On Error GoTo ErrHandler
     postData = m_Linkhub.toString(tmp)
     
     Dim result As Variant
-    
-    Set result = httpPOST("/IDs/New", getSession_token(CorpNum), postData)
+        
+    Set result = httpPOST("/IDs/New", getSession_token(CorpNum), postData, UserID)
     
     Set RegistContact = New PBResponse
     
